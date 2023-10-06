@@ -9,10 +9,11 @@ import {IReactorCallback} from "../interfaces/IReactorCallback.sol";
 import {IReactor} from "../interfaces/IReactor.sol";
 import {CurrencyLibrary} from "../lib/CurrencyLibrary.sol";
 import {ResolvedOrder, OutputToken, SignedOrder} from "../base/ReactorStructs.sol";
-import {ISwapRouter02} from "../external/ISwapRouter02.sol";
+import {INativeRouter} from "../external/INativeRouter.sol";
+import {INativeRouter} from "../external/INativeRouter.sol";
 
-/// @notice A fill contract that uses SwapRouter02 to execute trades
-contract SwapRouter02Executor is IReactorCallback, Owned {
+/// @notice A fill contract that uses NativeRouter to execute trades
+contract NativeRouterExecutor is IReactorCallback, Owned {
     using SafeTransferLib for ERC20;
     using CurrencyLibrary for address;
 
@@ -21,7 +22,8 @@ contract SwapRouter02Executor is IReactorCallback, Owned {
     /// @notice thrown if reactorCallback is called by an address other than the reactor
     error MsgSenderNotReactor();
 
-    ISwapRouter02 private immutable swapRouter02;
+    INativeRouter private immutable nativeRouter;
+
     address private immutable whitelistedCaller;
     IReactor private immutable reactor;
     WETH private immutable weth;
@@ -40,40 +42,40 @@ contract SwapRouter02Executor is IReactorCallback, Owned {
         _;
     }
 
-    constructor(address _whitelistedCaller, IReactor _reactor, address _owner, ISwapRouter02 _swapRouter02)
+    constructor(address _whitelistedCaller, IReactor _reactor, address _owner, INativeRouter _nativeRouter)
         Owned(_owner)
     {
         whitelistedCaller = _whitelistedCaller;
         reactor = _reactor;
-        swapRouter02 = _swapRouter02;
-        weth = WETH(payable(_swapRouter02.WETH9()));
+        nativeRouter = _nativeRouter;
+        weth = WETH(payable(_nativeRouter.WETH9()));
     }
 
     /// @notice assume that we already have all output tokens
-    function execute(SignedOrder calldata order, bytes calldata callbackData) external onlyWhitelistedCaller {
-        reactor.executeWithCallback(order, callbackData);
-    }
+    // function execute(SignedOrder calldata order, bytes calldata callbackData) external onlyWhitelistedCaller {
+    //     reactor.executeWithCallback(order, callbackData);
+    // }
 
     /// @notice assume that we already have all output tokens
-    function executeBatch(SignedOrder[] calldata orders, bytes calldata callbackData) external onlyWhitelistedCaller {
-        reactor.executeBatchWithCallback(orders, callbackData);
-    }
+    // function executeBatch(SignedOrder[] calldata orders, bytes calldata callbackData) external onlyWhitelistedCaller {
+    //     reactor.executeBatchWithCallback(orders, callbackData);
+    // }
 
-    /// @notice fill UniswapX orders using SwapRouter02
+    /// @notice fill UniswapX orders using nativeRouter
     /// @param callbackData It has the below encoded:
-    /// address[] memory tokensToApproveForSwapRouter02: Max approve these tokens to swapRouter02
+    /// address[] memory tokensToApproveFornativeRouter: Max approve these tokens to nativeRouter
     /// address[] memory tokensToApproveForReactor: Max approve these tokens to reactor
-    /// bytes[] memory multicallData: Pass into swapRouter02.multicall()
+    /// bytes[] memory multicallData: Pass into nativeRouter.multicall()
     function reactorCallback(ResolvedOrder[] calldata, bytes calldata callbackData) external onlyReactor {
         (
-            address[] memory tokensToApproveForSwapRouter02,
+            address[] memory tokensToApproveFornativeRouter,
             address[] memory tokensToApproveForReactor,
             bytes[] memory multicallData
         ) = abi.decode(callbackData, (address[], address[], bytes[]));
 
         unchecked {
-            for (uint256 i = 0; i < tokensToApproveForSwapRouter02.length; i++) {
-                ERC20(tokensToApproveForSwapRouter02[i]).safeApprove(address(swapRouter02), type(uint256).max);
+            for (uint256 i = 0; i < tokensToApproveFornativeRouter.length; i++) {
+                ERC20(tokensToApproveFornativeRouter[i]).safeApprove(address(nativeRouter), type(uint256).max);
             }
 
             for (uint256 i = 0; i < tokensToApproveForReactor.length; i++) {
@@ -81,7 +83,7 @@ contract SwapRouter02Executor is IReactorCallback, Owned {
             }
         }
 
-        swapRouter02.multicall(type(uint256).max, multicallData);
+        nativeRouter.multicall(multicallData);
 
         // transfer any native balance to the reactor
         // it will refund any excess
@@ -91,13 +93,13 @@ contract SwapRouter02Executor is IReactorCallback, Owned {
     }
 
     /// @notice This function can be used to convert ERC20s to ETH that remains in this contract
-    /// @param tokensToApprove Max approve these tokens to swapRouter02
-    /// @param multicallData Pass into swapRouter02.multicall()
+    /// @param tokensToApprove Max approve these tokens to nativeRouter
+    /// @param multicallData Pass into nativeRouter.multicall()
     function multicall(ERC20[] calldata tokensToApprove, bytes[] calldata multicallData) external onlyOwner {
         for (uint256 i = 0; i < tokensToApprove.length; i++) {
-            tokensToApprove[i].safeApprove(address(swapRouter02), type(uint256).max);
+            tokensToApprove[i].safeApprove(address(nativeRouter), type(uint256).max);
         }
-        swapRouter02.multicall(type(uint256).max, multicallData);
+        nativeRouter.multicall(multicallData);
     }
 
     /// @notice Unwraps the contract's WETH9 balance and sends it to the recipient as ETH. Can only be called by owner.
