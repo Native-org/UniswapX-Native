@@ -24,7 +24,7 @@ contract NativeRouterExecutor is IReactorCallback, Owned {
 
     INativeRouter private immutable nativeRouter;
 
-    address private immutable whitelistedCaller;
+    address private whitelistedCaller;
     IReactor private immutable reactor;
     WETH private immutable weth;
 
@@ -52,34 +52,36 @@ contract NativeRouterExecutor is IReactorCallback, Owned {
     }
 
     /// @notice assume that we already have all output tokens
-    // function execute(SignedOrder calldata order, bytes calldata callbackData) external onlyWhitelistedCaller {
-    //     reactor.executeWithCallback(order, callbackData);
-    // }
+    function execute(SignedOrder calldata order, bytes calldata callbackData) external onlyWhitelistedCaller {
+        reactor.executeWithCallback(order, callbackData);
+    }
 
     /// @notice assume that we already have all output tokens
-    // function executeBatch(SignedOrder[] calldata orders, bytes calldata callbackData) external onlyWhitelistedCaller {
-    //     reactor.executeBatchWithCallback(orders, callbackData);
-    // }
+    function executeBatch(SignedOrder[] calldata orders, bytes calldata callbackData) external onlyWhitelistedCaller {
+        reactor.executeBatchWithCallback(orders, callbackData);
+    }
 
     /// @notice fill UniswapX orders using nativeRouter
     /// @param callbackData It has the below encoded:
-    /// address[] memory tokensToApproveFornativeRouter: Max approve these tokens to nativeRouter
+    /// address[] memory tokensToApproveForNativeRouter: Max approve these tokens to nativeRouter
     /// address[] memory tokensToApproveForReactor: Max approve these tokens to reactor
     /// bytes[] memory multicallData: Pass into nativeRouter.multicall()
     function reactorCallback(ResolvedOrder[] calldata, bytes calldata callbackData) external onlyReactor {
         (
-            address[] memory tokensToApproveFornativeRouter,
+            address[] memory tokensToApproveForNativeRouter,
+            uint256[] memory tokensAmountIns,
             address[] memory tokensToApproveForReactor,
+            uint256[] memory tokensAmountOuts,
             bytes[] memory multicallData
-        ) = abi.decode(callbackData, (address[], address[], bytes[]));
+        ) = abi.decode(callbackData, (address[], uint256[], address[], uint256[], bytes[]));
 
         unchecked {
-            for (uint256 i = 0; i < tokensToApproveFornativeRouter.length; i++) {
-                ERC20(tokensToApproveFornativeRouter[i]).safeApprove(address(nativeRouter), type(uint256).max);
+            for (uint256 i = 0; i < tokensToApproveForNativeRouter.length; i++) {
+                ERC20(tokensToApproveForNativeRouter[i]).safeApprove(address(nativeRouter), tokensAmountIns[i]);
             }
 
             for (uint256 i = 0; i < tokensToApproveForReactor.length; i++) {
-                ERC20(tokensToApproveForReactor[i]).safeApprove(address(reactor), type(uint256).max);
+                ERC20(tokensToApproveForReactor[i]).safeApprove(address(reactor), tokensAmountOuts[i]);
             }
         }
 
@@ -115,6 +117,10 @@ contract NativeRouterExecutor is IReactorCallback, Owned {
     /// @param recipient The recipient of the ETH
     function withdrawETH(address recipient) external onlyOwner {
         SafeTransferLib.safeTransferETH(recipient, address(this).balance);
+    }
+
+    function setWhitelistCaller(address newCaller) external onlyOwner {
+        whitelistedCaller = newCaller;
     }
 
     /// @notice Necessary for this contract to receive ETH when calling unwrapWETH()

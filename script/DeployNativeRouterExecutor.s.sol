@@ -8,7 +8,7 @@ import {NativeRouterExecutor} from "../src/sample-executors/NativeRouterExecutor
 import {INativeRouter} from "../src/external/INativeRouter.sol";
 import {IReactor} from "../src/interfaces/IReactor.sol";
 
-contract DeploySwapRouter02Executor is Script {
+contract DeployNativeRouterExecutor is Script {
     function setUp() public {}
 
     function run() public returns (NativeRouterExecutor executor) {
@@ -22,7 +22,7 @@ contract DeploySwapRouter02Executor is Script {
         executor = new NativeRouterExecutor{salt: 0x00}(whitelistedCaller, reactor, owner, nativeRouter);
         vm.stopBroadcast();
 
-        console2.log("SwapRouter02Executor", address(executor));
+        console2.log("NativeRouterExecutor", address(executor));
         console2.log("owner", executor.owner());
     }
 }
